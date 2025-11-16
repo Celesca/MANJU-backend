@@ -1,7 +1,8 @@
-package handlers
+package services
 
 import (
 	"encoding/json"
+	"manju/backend/models/request"
 	"manju/backend/repository"
 	"net/http"
 
@@ -9,24 +10,8 @@ import (
 	"gorm.io/datatypes"
 )
 
-func RegisterUserRoutes(app *fiber.App, repo *repository.UserRepository) {
-	app.Post("/users", func(c *fiber.Ctx) error { return createUser(c, repo) })
-	app.Get("/users", func(c *fiber.Ctx) error { return listUsers(c, repo) })
-	app.Get("/users/:id", func(c *fiber.Ctx) error { return getUser(c, repo) })
-	app.Patch("/users/:id", func(c *fiber.Ctx) error { return updateUser(c, repo) })
-	app.Delete("/users/:id", func(c *fiber.Ctx) error { return deleteUser(c, repo) })
-}
-
-// payloads
-type createUserPayload struct {
-	Email  string                 `json:"email"`
-	Name   string                 `json:"name"`
-	Info   map[string]interface{} `json:"info,omitempty"`
-	Status repository.Status      `json:"status,omitempty"`
-}
-
 func createUser(c *fiber.Ctx, repo *repository.UserRepository) error {
-	var body createUserPayload
+	var body request.CreateUserPayload
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
 	}
