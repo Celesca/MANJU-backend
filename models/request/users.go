@@ -3,7 +3,7 @@ package request
 import "manju/backend/repository"
 
 // payloads
-type createUserPayload struct {
+type CreateUserPayload struct {
 	Email  string                 `json:"email"`
 	Name   string                 `json:"name"`
 	Info   map[string]interface{} `json:"info,omitempty"`

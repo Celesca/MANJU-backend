@@ -10,7 +10,7 @@ import (
 	"gorm.io/datatypes"
 )
 
-func createUser(c *fiber.Ctx, repo *repository.UserRepository) error {
+func CreateUser(c *fiber.Ctx, repo *repository.UserRepository) error {
 	var body request.CreateUserPayload
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
@@ -49,7 +49,7 @@ func createUser(c *fiber.Ctx, repo *repository.UserRepository) error {
 	return c.Status(http.StatusCreated).JSON(created)
 }
 
-func listUsers(c *fiber.Ctx, repo *repository.UserRepository) error {
+func ListUsers(c *fiber.Ctx, repo *repository.UserRepository) error {
 	users, err := repo.List()
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -57,7 +57,7 @@ func listUsers(c *fiber.Ctx, repo *repository.UserRepository) error {
 	return c.JSON(users)
 }
 
-func getUser(c *fiber.Ctx, repo *repository.UserRepository) error {
+func GetUser(c *fiber.Ctx, repo *repository.UserRepository) error {
 	id := c.Params("id")
 	user, err := repo.GetByID(id)
 	if err != nil {
@@ -69,7 +69,7 @@ func getUser(c *fiber.Ctx, repo *repository.UserRepository) error {
 	return c.JSON(user)
 }
 
-func updateUser(c *fiber.Ctx, repo *repository.UserRepository) error {
+func UpdateUser(c *fiber.Ctx, repo *repository.UserRepository) error {
 	id := c.Params("id")
 	payload := make(map[string]interface{})
 	if err := c.BodyParser(&payload); err != nil {
@@ -98,7 +98,7 @@ func updateUser(c *fiber.Ctx, repo *repository.UserRepository) error {
 	return c.JSON(updated)
 }
 
-func deleteUser(c *fiber.Ctx, repo *repository.UserRepository) error {
+func DeleteUser(c *fiber.Ctx, repo *repository.UserRepository) error {
 	id := c.Params("id")
 	ok, err := repo.Delete(id)
 	if err != nil {
