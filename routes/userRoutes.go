@@ -12,7 +12,7 @@ func UserRoutes(app fiber.Router) {
 	repo := repository.New(database.Database)
 	ctrl := controllers.NewUserController(repo)
 
-	router := app.Group("/v1/users")
+	router := app.Group("/users")
 	router.Post("/", ctrl.CreateUser)
 	router.Get("/", ctrl.ListUsers)
 	router.Get("/:id", ctrl.GetUser)
