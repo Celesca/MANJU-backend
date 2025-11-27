@@ -6,7 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -17,20 +19,34 @@ import (
 var googleOAuthConfig *oauth2.Config
 
 func init() {
-	redirect := os.Getenv("OAUTH_REDIRECT_URL")
+	// Prefer REDIRECT_URI (from .env) for consistency with the project file,
+	// fall back to OAUTH_REDIRECT_URL, then to a sensible default.
+	redirect := strings.TrimSpace(os.Getenv("REDIRECT_URI"))
+	if redirect == "" {
+		redirect = strings.TrimSpace(os.Getenv("OAUTH_REDIRECT_URL"))
+	}
 	if redirect == "" {
 		redirect = "http://localhost:8080/api/auth/callback/google"
 	}
+	clientID := strings.TrimSpace(os.Getenv("CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("CLIENT_SECRET"))
 	googleOAuthConfig = &oauth2.Config{
 		RedirectURL:  redirect,
-		ClientID:     os.Getenv("CLIENT_ID"),
-		ClientSecret: os.Getenv("CLIENT_SECRET"),
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
 		Scopes: []string{
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
 		},
 		Endpoint: google.Endpoint,
 	}
+	// Mask and log the client id and redirect for debugging (do not log secrets)
+	cid := os.Getenv("CLIENT_ID")
+	masked := cid
+	if len(cid) > 8 {
+		masked = cid[:4] + "..." + cid[len(cid)-4:]
+	}
+	log.Printf("OAuth CLIENT_ID=%s REDIRECT=%s", masked, redirect)
 }
 
 func generateState(c *fiber.Ctx) (string, error) {
@@ -38,7 +54,8 @@ func generateState(c *fiber.Ctx) (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	state := base64.URLEncoding.EncodeToString(b)
+	// use RawURLEncoding to avoid padding (=) and keep the cookie a bit shorter
+	state := base64.RawURLEncoding.EncodeToString(b)
 	c.Cookie(&fiber.Cookie{ // set a short-lived cookie to verify state
 		Name:    "oauthstate",
 		Value:   state,
@@ -50,11 +67,30 @@ func generateState(c *fiber.Ctx) (string, error) {
 
 // Login starts the OAuth2 flow and redirects the user to Google's consent screen.
 func Login(c *fiber.Ctx) error {
+	// Diagnostic logging: log request header and cookie size to help debug 431 errors
+	cookieHeader := c.Get("Cookie")
+	totalHeaderLen := 0
+	c.Request().Header.VisitAll(func(k, v []byte) {
+		totalHeaderLen += len(k) + len(v)
+	})
+	log.Printf("Auth Login request headers total bytes=%d cookieHeaderBytes=%d", totalHeaderLen, len(cookieHeader))
+
 	state, err := generateState(c)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to generate oauth state")
 	}
 	url := googleOAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	// Log the generated auth URL with client_id masked for diagnosis
+	// mask client_id value in the URL
+	maskedUrl := url
+	if cid := os.Getenv("CLIENT_ID"); cid != "" {
+		maskedCid := cid
+		if len(cid) > 8 {
+			maskedCid = cid[:4] + "..." + cid[len(cid)-4:]
+		}
+		maskedUrl = strings.ReplaceAll(maskedUrl, cid, maskedCid)
+	}
+	log.Printf("Auth URL: %s", maskedUrl)
 	return c.Redirect(url, fiber.StatusTemporaryRedirect)
 }
 

@@ -9,19 +9,23 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/swagger"
+	"github.com/joho/godotenv"
 	"github.com/stretchr/gomniauth"
 	"github.com/stretchr/gomniauth/providers/google"
 	"github.com/stretchr/signature"
 )
 
 func main() {
+	// Load .env (if present) so env vars from the project file are available during local development
+	_ = godotenv.Load()
+
 	database.Connect()
 	app := fiber.New()
 
 	// Authentication
 	gomniauth.SetSecurityKey(signature.RandomKey(64))
 	gomniauth.WithProviders(
-		google.New(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"), "http://localhost:8080/auth/callback/google"),
+		google.New(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"), "http://localhost:8080/api/auth/callback/google"),
 	)
 
 	api := app.Group("/api")
