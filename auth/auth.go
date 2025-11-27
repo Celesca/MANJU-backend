@@ -84,7 +84,8 @@ func Login(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to generate oauth state")
 	}
-	url := googleOAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	// Request offline access and ask for consent explicitly so Google returns a refresh_token
+	url := googleOAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
 	// Log the generated auth URL with client_id masked for diagnosis
 	// mask client_id value in the URL
 	maskedUrl := url
