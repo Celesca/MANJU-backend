@@ -26,7 +26,7 @@ func init() {
 		redirect = strings.TrimSpace(os.Getenv("OAUTH_REDIRECT_URL"))
 	}
 	if redirect == "" {
-		redirect = "http://localhost:8080/api/auth/callback/google"
+		redirect = "http://localhost:8080/auth/callback/google"
 	}
 	clientID := strings.TrimSpace(os.Getenv("CLIENT_ID"))
 	clientSecret := strings.TrimSpace(os.Getenv("CLIENT_SECRET"))

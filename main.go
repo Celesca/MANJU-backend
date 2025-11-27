@@ -4,6 +4,7 @@ import (
 	"log"
 	"manju/backend/config/database"
 	"os"
+	"strings"
 
 	routes "manju/backend/routes"
 
@@ -19,14 +20,22 @@ func main() {
 	// Load .env (if present) so env vars from the project file are available during local development
 	_ = godotenv.Load()
 
+	// ensure redirect URI is consistent and trimmed
+	redirect := strings.TrimSpace(os.Getenv("REDIRECT_URI"))
+	if redirect == "" {
+		redirect = "http://localhost:8080/auth/callback/google"
+	}
+
 	database.Connect()
 	app := fiber.New()
 
 	// Authentication
 	gomniauth.SetSecurityKey(signature.RandomKey(64))
 	gomniauth.WithProviders(
-		google.New(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"), "http://localhost:8080/api/auth/callback/google"),
+		google.New(strings.TrimSpace(os.Getenv("CLIENT_ID")), strings.TrimSpace(os.Getenv("CLIENT_SECRET")), redirect),
 	)
+
+	routes.AuthRoutes(app)
 
 	api := app.Group("/api")
 	api.Get("/docs/*", swagger.HandlerDefault) // default swagger UI
@@ -36,7 +45,6 @@ func main() {
 
 	routes.UserRoutes(api)
 	routes.VoiceRoutes(api)
-	routes.AuthRoutes(api)
 
 	log.Fatal(app.Listen(":8080"))
 }
