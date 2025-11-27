@@ -14,6 +14,8 @@ The server exposes a `User` model and CRUD endpoints under `/users`.
 # Set environment variables (optional) or copy .env.example to .env
 cp .env.example .env
 
+export $(cat .env)
+
 # build and run
 go run ./main.go
 ```
