@@ -20,13 +20,13 @@ const (
 
 // User model
 type User struct {
-	ID        uuid.UUID       `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
-	Email     string          `gorm:"unique;not null" json:"email"`
-	Name      string          `gorm:"not null" json:"name"`
-	Info      datatypes.JSON  `gorm:"type:jsonb" json:"info"`
-	Status    Status          `json:"status"`
-	CreatedAt time.Time       `gorm:"default:now()" json:"created_at"`
-	UpdatedAt *time.Time      `json:"updated_at"`
+	ID        uuid.UUID      `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
+	Email     string         `gorm:"unique;not null" json:"email"`
+	Name      string         `gorm:"not null" json:"name"`
+	Info      datatypes.JSON `gorm:"type:jsonb" json:"info"`
+	Status    Status         `json:"status"`
+	CreatedAt time.Time      `gorm:"default:now()" json:"created_at"`
+	UpdatedAt *time.Time     `json:"updated_at"`
 }
 
 // BeforeCreate hook to ensure UUID for SQLite
@@ -76,6 +76,18 @@ func (r *UserRepository) List() ([]User, error) {
 func (r *UserRepository) GetByID(id string) (*User, error) {
 	var user User
 	if err := r.db.Where("id = ?", id).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetByEmail returns a user by email (case-insensitive)
+func (r *UserRepository) GetByEmail(email string) (*User, error) {
+	var user User
+	if err := r.db.Where("lower(email) = lower(?)", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
