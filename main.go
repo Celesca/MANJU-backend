@@ -32,6 +32,7 @@ func main() {
 
 	routes.UserRoutes(api)
 	routes.VoiceRoutes(api)
+	routes.AuthRoutes(api)
 
 	log.Fatal(app.Listen(":8080"))
 }
