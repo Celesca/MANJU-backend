@@ -7,13 +7,18 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+
 	"os"
 	"strings"
 	"time"
 
+	"manju/backend/config/database"
+	"manju/backend/repository"
+
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"gorm.io/datatypes"
 )
 
 var googleOAuthConfig *oauth2.Config
@@ -75,6 +80,31 @@ func Login(c *fiber.Ctx) error {
 	})
 	log.Printf("Auth Login request headers total bytes=%d cookieHeaderBytes=%d", totalHeaderLen, len(cookieHeader))
 
+	// Clear existing cookies sent by the browser to avoid oversized Cookie header
+	// which can cause 431 errors when redirecting to external providers.
+	// We parse the Cookie header and clear each cookie server-side.
+	if cookieHeader != "" {
+		parts := strings.Split(cookieHeader, ";")
+		cleared := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			kv := strings.SplitN(p, "=", 2)
+			name := strings.TrimSpace(kv[0])
+			if name == "" {
+				continue
+			}
+			// Clear cookie by name
+			c.ClearCookie(name)
+			cleared = append(cleared, name)
+		}
+		if len(cleared) > 0 {
+			log.Printf("Cleared cookies before OAuth login: %v", cleared)
+		}
+	}
+
 	state, err := generateState(c)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to generate oauth state")
@@ -128,10 +158,100 @@ func Callback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to parse userinfo")
 	}
 
-	// At this point you would typically create or lookup the user in your DB
-	// and create a session/jwt. For now, return the Google user info + token.
-	return c.JSON(fiber.Map{
-		"user":  gu,
-		"token": token,
-	})
+	// Persist user (create if not exists)
+	email, _ := gu["email"].(string)
+	name, _ := gu["name"].(string)
+	infoBytes, _ := json.Marshal(gu)
+
+	userRepo := repository.New(database.Database)
+	user, err := userRepo.GetByEmail(email)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("db error")
+	}
+	if user == nil {
+		newUser := &repository.User{
+			Email:  email,
+			Name:   name,
+			Info:   datatypes.JSON(infoBytes),
+			Status: repository.StatusActive,
+		}
+		created, err := userRepo.Create(newUser)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("failed to create user")
+		}
+		user = created
+	}
+
+	// Create server-side session and persist refresh token if provided
+	sessionRepo := repository.NewSession(database.Database)
+	var expires *time.Time
+	if !token.Expiry.IsZero() {
+		t := token.Expiry
+		expires = &t
+	}
+	session := &repository.Session{
+		UserID:       user.ID,
+		RefreshToken: token.RefreshToken,
+		ExpiresAt:    expires,
+	}
+	createdSession, err := sessionRepo.Create(session)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("failed to create session")
+	}
+
+	// Set httpOnly session cookie (do not expose tokens in URL)
+	cookie := &fiber.Cookie{
+		Name:     "manju_session",
+		Value:    createdSession.ID.String(),
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		HTTPOnly: true,
+		Secure:   false, // set true in production with HTTPS
+		Path:     "/",
+	}
+	c.Cookie(cookie)
+
+	// clear oauth state
+	c.ClearCookie("oauthstate")
+
+	frontend := strings.TrimSpace(os.Getenv("FRONTEND_URL"))
+	if frontend == "" {
+		frontend = "http://localhost:5173"
+	}
+	return c.Redirect(frontend, fiber.StatusTemporaryRedirect)
+}
+
+// Me returns the authenticated user's basic info based on session cookie
+func Me(c *fiber.Ctx) error {
+	sid := c.Cookies("manju_session")
+	if sid == "" {
+		return c.Status(fiber.StatusUnauthorized).SendString("unauthenticated")
+	}
+	sessionRepo := repository.NewSession(database.Database)
+	sess, err := sessionRepo.GetByID(sid)
+	if err != nil || sess == nil {
+		return c.Status(fiber.StatusUnauthorized).SendString("unauthenticated")
+	}
+	userRepo := repository.New(database.Database)
+	user, err := userRepo.GetByID(sess.UserID.String())
+	if err != nil || user == nil {
+		return c.Status(fiber.StatusUnauthorized).SendString("unauthenticated")
+	}
+	return c.JSON(fiber.Map{"id": user.ID, "email": user.Email, "name": user.Name})
+}
+
+// RequireAuth is a middleware that ensures the request has a valid session.
+// It sets `userID` in `c.Locals` for downstream handlers.
+func RequireAuth(c *fiber.Ctx) error {
+	sid := c.Cookies("manju_session")
+	if sid == "" {
+		return c.Status(fiber.StatusUnauthorized).SendString("unauthenticated")
+	}
+	sessionRepo := repository.NewSession(database.Database)
+	sess, err := sessionRepo.GetByID(sid)
+	if err != nil || sess == nil {
+		return c.Status(fiber.StatusUnauthorized).SendString("unauthenticated")
+	}
+	// Set userID for handlers
+	c.Locals("userID", sess.UserID.String())
+	return c.Next()
 }

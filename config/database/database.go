@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"manju/backend/repository"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -28,6 +30,11 @@ func Connect() {
 	Database, _ = gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: newLogger,
 	})
+
+	// Auto-migrate core models (User, Session, Project)
+	if err := Database.AutoMigrate(&repository.User{}, &repository.Session{}, &repository.Project{}); err != nil {
+		log.Printf("AutoMigrate error: %v", err)
+	}
 
 	fmt.Println("Database connected")
 }
