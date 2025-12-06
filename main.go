@@ -23,7 +23,7 @@ func main() {
 	// ensure redirect URI is consistent and trimmed
 	redirect := strings.TrimSpace(os.Getenv("REDIRECT_URI"))
 	if redirect == "" {
-		redirect = "http://localhost:8080/auth/callback/google"
+		redirect = "http://localhost:8000/auth/callback/google"
 	}
 
 	database.Connect()

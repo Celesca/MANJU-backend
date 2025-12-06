@@ -3,11 +3,12 @@ version: '3.8'
 services:
   db:
     build:
-      context: ./server/db
+      context: ./db
       dockerfile: Dockerfile
     image: manju-postgres:latest
     restart: unless-stopped
     environment:
+      # Standard Postgres env. You should set these in .env for production.
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: manju_dev
@@ -20,26 +21,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile.app
-    image: manju-app:latest
-    container_name: manju_app
-    working_dir: /app
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    environment:
-      - GO_ENV=development
-      - CLIENT_ID=${CLIENT_ID}
-      - CLIENT_SECRET=${CLIENT_SECRET}
-      - REDIRECT_URI=${REDIRECT_URI}
-      - FRONTEND_URL=${FRONTEND_URL}
-    depends_on:
-      - db
 
 volumes:
   pgdata:

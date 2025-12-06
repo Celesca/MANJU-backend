@@ -80,12 +80,36 @@ func Login(c *fiber.Ctx) error {
 	})
 	log.Printf("Auth Login request headers total bytes=%d cookieHeaderBytes=%d", totalHeaderLen, len(cookieHeader))
 
+	// Clear existing cookies sent by the browser to avoid oversized Cookie header
+	// which can cause 431 errors when redirecting to external providers.
+	// We parse the Cookie header and clear each cookie server-side.
+	if cookieHeader != "" {
+		parts := strings.Split(cookieHeader, ";")
+		cleared := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			kv := strings.SplitN(p, "=", 2)
+			name := strings.TrimSpace(kv[0])
+			if name == "" {
+				continue
+			}
+			// Clear cookie by name
+			c.ClearCookie(name)
+			cleared = append(cleared, name)
+		}
+		if len(cleared) > 0 {
+			log.Printf("Cleared cookies before OAuth login: %v", cleared)
+		}
+	}
+
 	state, err := generateState(c)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("failed to generate oauth state")
 	}
-	// Request offline access and ask for consent explicitly so Google returns a refresh_token
-	url := googleOAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
+	url := googleOAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	// Log the generated auth URL with client_id masked for diagnosis
 	// mask client_id value in the URL
 	maskedUrl := url
