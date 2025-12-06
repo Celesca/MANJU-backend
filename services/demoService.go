@@ -260,3 +260,112 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+// WorkflowTypeResponse represents the workflow type detection response
+type WorkflowTypeResponse struct {
+	InputType    string `json:"input_type"`
+	OutputType   string `json:"output_type"`
+	WorkflowType string `json:"workflow_type"`
+	HasRAG       bool   `json:"has_rag"`
+	HasSheets    bool   `json:"has_sheets"`
+	HasCondition bool   `json:"has_condition"`
+}
+
+// GetWorkflowType detects the workflow input/output modalities
+func GetWorkflowType(c *fiber.Ctx, repo *repository.ProjectRepository) error {
+	// Get user ID from context
+	userIDStr := c.Locals("userID")
+	if userIDStr == nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	// Get project ID from params
+	projectID := c.Params("id")
+	if projectID == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "project id required"})
+	}
+
+	// Get project from database
+	project, err := repo.GetByID(projectID)
+	if err != nil {
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
+	}
+
+	// Verify ownership
+	if project.UserID.String() != userIDStr.(string) {
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
+	}
+
+	// Parse nodes
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(project.Nodes, &nodes); err != nil {
+		nodes = []map[string]interface{}{}
+	}
+
+	// Build request to AI service
+	var connections []map[string]interface{}
+	if err := json.Unmarshal(project.Connections, &connections); err != nil {
+		connections = []map[string]interface{}{}
+	}
+
+	workflow := WorkflowConfig{
+		Nodes:       nodes,
+		Connections: connections,
+	}
+
+	requestBody, err := json.Marshal(workflow)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to build request"})
+	}
+
+	// Call AI service workflow-type endpoint
+	aiServiceURL := getAIServiceURL() + "/workflow-type"
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	resp, err := client.Post(aiServiceURL, "application/json", bytes.NewBuffer(requestBody))
+	if err != nil {
+		// If AI service is not available, detect locally
+		nodeTypes := make([]string, 0)
+		for _, node := range nodes {
+			if t, ok := node["type"].(string); ok {
+				nodeTypes = append(nodeTypes, t)
+			}
+		}
+
+		hasVoiceInput := contains(nodeTypes, "voice-input")
+		hasVoiceOutput := contains(nodeTypes, "voice-output")
+
+		inputType := "text"
+		if hasVoiceInput {
+			inputType = "voice"
+		}
+
+		outputType := "text"
+		if hasVoiceOutput {
+			outputType = "voice"
+		}
+
+		return c.JSON(WorkflowTypeResponse{
+			InputType:    inputType,
+			OutputType:   outputType,
+			WorkflowType: inputType + "-to-" + outputType,
+			HasRAG:       contains(nodeTypes, "rag-documents"),
+			HasSheets:    contains(nodeTypes, "google-sheets"),
+			HasCondition: contains(nodeTypes, "if-condition"),
+		})
+	}
+	defer resp.Body.Close()
+
+	// Read and return response
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read response"})
+	}
+
+	var workflowTypeResponse WorkflowTypeResponse
+	if err := json.Unmarshal(responseBody, &workflowTypeResponse); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to parse response"})
+	}
+
+	return c.JSON(workflowTypeResponse)
+}

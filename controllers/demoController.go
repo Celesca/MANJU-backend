@@ -26,3 +26,8 @@ func (ctrl *DemoController) DemoProject(c *fiber.Ctx) error {
 func (ctrl *DemoController) ValidateWorkflow(c *fiber.Ctx) error {
 	return services.ValidateWorkflow(c, ctrl.repo)
 }
+
+// GetWorkflowType handles GET /projects/:id/workflow-type
+func (ctrl *DemoController) GetWorkflowType(c *fiber.Ctx) error {
+	return services.GetWorkflowType(c, ctrl.repo)
+}

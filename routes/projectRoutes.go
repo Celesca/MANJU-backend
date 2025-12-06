@@ -23,4 +23,5 @@ func ProjectRoutes(app fiber.Router) {
 	// Demo and validation endpoints
 	router.Post("/:id/demo", demoCtrl.DemoProject)
 	router.Post("/:id/validate", demoCtrl.ValidateWorkflow)
+	router.Get("/:id/workflow-type", demoCtrl.GetWorkflowType)
 }
