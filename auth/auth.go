@@ -255,3 +255,23 @@ func RequireAuth(c *fiber.Ctx) error {
 	c.Locals("userID", sess.UserID.String())
 	return c.Next()
 }
+
+// Logout deletes the server session and clears the session cookie.
+func Logout(c *fiber.Ctx) error {
+	sid := c.Cookies("manju_session")
+	if sid != "" {
+		sessionRepo := repository.NewSession(database.Database)
+		_ = sessionRepo.DeleteByID(sid)
+	}
+	// Clear the cookie in browser
+	c.ClearCookie("manju_session")
+	// Optional: clear oauthstate too
+	c.ClearCookie("oauthstate")
+
+	frontend := strings.TrimSpace(os.Getenv("FRONTEND_URL"))
+	if frontend == "" {
+		frontend = "http://localhost:5173"
+	}
+	// Redirect back to frontend home
+	return c.Redirect(frontend, fiber.StatusSeeOther)
+}

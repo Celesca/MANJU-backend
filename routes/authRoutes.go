@@ -18,4 +18,5 @@ func AuthRoutes(app fiber.Router) {
 	router.Get("/login/google", authpkg.Login)
 	router.Get("/callback/google", authpkg.Callback)
 	router.Get("/me", authpkg.Me)
+	router.Get("/logout", authpkg.Logout)
 }
