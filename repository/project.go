@@ -75,6 +75,15 @@ func (r *ProjectRepository) GetByUserID(userID string) ([]Project, error) {
 	return projects, nil
 }
 
+// ListAll returns all projects (ordered) -- used when auth is not required
+func (r *ProjectRepository) ListAll() ([]Project, error) {
+	var projects []Project
+	if err := r.db.Order("updated_at DESC, created_at DESC").Find(&projects).Error; err != nil {
+		return nil, err
+	}
+	return projects, nil
+}
+
 // Update updates an existing project
 func (r *ProjectRepository) Update(p *Project) (*Project, error) {
 	if err := r.db.Save(p).Error; err != nil {
