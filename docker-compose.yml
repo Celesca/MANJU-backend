@@ -22,12 +22,12 @@ services:
       retries: 5
 
   app:
-    image: golang:1.24
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    image: manju-app:latest
     container_name: manju_app
     working_dir: /app
-    volumes:
-      - ./:/app
-    command: sh -lc "go mod download && go run main.go"
     ports:
       - "8080:8080"
     env_file:
