@@ -9,6 +9,7 @@ import (
 	routes "manju/backend/routes"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/swagger"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/gomniauth"
@@ -28,6 +29,18 @@ func main() {
 
 	database.Connect()
 	app := fiber.New()
+
+	// CORS: allow frontend origin and enable credentials (so cookies are sent)
+	frontend := strings.TrimSpace(os.Getenv("FRONTEND_URL"))
+	if frontend == "" {
+		frontend = "http://localhost:5173"
+	}
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     frontend,
+		AllowCredentials: true,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+	}))
 
 	// Authentication
 	gomniauth.SetSecurityKey(signature.RandomKey(64))
