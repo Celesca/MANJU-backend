@@ -238,3 +238,20 @@ func Me(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"id": user.ID, "email": user.Email, "name": user.Name})
 }
+
+// RequireAuth is a middleware that ensures the request has a valid session.
+// It sets `userID` in `c.Locals` for downstream handlers.
+func RequireAuth(c *fiber.Ctx) error {
+	sid := c.Cookies("manju_session")
+	if sid == "" {
+		return c.Status(fiber.StatusUnauthorized).SendString("unauthenticated")
+	}
+	sessionRepo := repository.NewSession(database.Database)
+	sess, err := sessionRepo.GetByID(sid)
+	if err != nil || sess == nil {
+		return c.Status(fiber.StatusUnauthorized).SendString("unauthenticated")
+	}
+	// Set userID for handlers
+	c.Locals("userID", sess.UserID.String())
+	return c.Next()
+}
