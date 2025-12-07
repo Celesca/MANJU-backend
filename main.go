@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"manju/backend/config/database"
+	"manju/backend/repository"
 	"os"
 	"strings"
 
@@ -41,6 +42,33 @@ func main() {
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 	}))
+
+	// Dev helper: disable auth checks and inject a developer user into context
+	if strings.ToLower(strings.TrimSpace(os.Getenv("DISABLE_AUTH"))) == "true" {
+		devID := strings.TrimSpace(os.Getenv("DEV_USER_ID"))
+		log.Printf("DISABLE_AUTH=true — injecting dev user (DEV_USER_ID=%s)", devID)
+		app.Use(func(c *fiber.Ctx) error {
+			uid := devID
+			if uid == "" {
+				// try to pick an existing user or create a dev user
+				userRepo := repository.New(database.Database)
+				users, err := userRepo.List()
+				if err == nil && len(users) > 0 {
+					uid = users[0].ID.String()
+				} else {
+					newUser := &repository.User{Email: "dev@localhost", Name: "Dev", Status: repository.StatusActive}
+					created, err := userRepo.Create(newUser)
+					if err == nil {
+						uid = created.ID.String()
+					}
+				}
+			}
+			if uid != "" {
+				c.Locals("userID", uid)
+			}
+			return c.Next()
+		})
+	}
 
 	// Authentication
 	gomniauth.SetSecurityKey(signature.RandomKey(64))

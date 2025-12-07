@@ -86,10 +86,14 @@ func CreateProject(c *fiber.Ctx, repo *repository.ProjectRepository) error {
 }
 
 func ListProjects(c *fiber.Ctx, repo *repository.ProjectRepository) error {
-	// Get user ID from context
+	// Get user ID from context if available; if not, return all projects (no auth)
 	userIDStr := c.Locals("userID")
 	if userIDStr == nil {
-		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		projects, err := repo.ListAll()
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(projects)
 	}
 
 	projects, err := repo.GetByUserID(userIDStr.(string))
